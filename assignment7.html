@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Text Fingerprinting</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://d3js.org/d3-color.v1.min.js"></script>
+    <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+
+    <style type="text/css">
+      #key_and_vis{
+        display: flex;
+      }
+      #key{
+        width:18%;
+      }
+      #key1{
+        width: 75px;
+        height:220px;
+      }
+      #text-vis{
+        width:82%
+      }
+    </style>
+</head>
+<body>
+    <h1>Literature Fingerprints</h1>
+    <h2>By Holley McShan and Corinne Bintz</h2>
+    <p>Use this page to upload a collection of different text documents and visualize their "fingerprints". To generate the fingerprint, the text files are broken up into shorter lists of words. For each subset, we draw a small box and set the color of the box based on the average word length for all of the words in that subset.
+    </p>
+    <input type="file" id="files" name="files[]" multiple />
+
+    <select id="fingerprint_type" onchange="document.getElementById('start').innerHTML='Lowest '+this.value; document.getElementById('end').innerHTML='Highest '+this.value">
+        <option value="average_length">Average word length</option>
+        <option value="hapax_legomena">Hapax Legomena</option>
+    </select>
+
+    <br>
+    <br>
+    <div id="key_and_vis">
+      <div id="text-vis"></div>
+      <div id="key"><b>KEY</b><br>
+        <div id="start">Lowest average_length</div>
+        <svg id="key1"></svg>
+        <div id="end">Highest average_length</div>
+      </div>
+    </div>
+    <script>
+
+        // constant to determine how the file gets segmented
+        const WORDS_PER_BLOCK = 200;
+
+
+        // div height and width for each text file
+        const DIV_WIDTH = 800;
+        const DIV_HEIGHT = 165;
+
+
+        // the master collection of records to be visualized
+        let master_file_list = [];
+
+        // the key
+        var key = d3.select("#key1")
+
+            var legend = key.append("defs")
+            .append("svg:linearGradient")
+            .attr("id", "gradient")
+            .attr("x1", "100%")
+            .attr("y1", "0%")
+            .attr("x2", "100%")
+            .attr("y2", "100%")
+            .attr("spreadMethod", "pad");
+
+            legend
+            .append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", "#67a9cf")
+            .attr("stop-opacity", 1);
+            legend
+            .append("stop")
+            .attr("offset", "50%")
+            .attr("stop-color", "#f7f7f7")
+            .attr("stop-opacity", 1);
+            legend
+            .append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", "#ef8a62")
+            .attr("stop-opacity", 1);
+
+
+            key.append("rect")
+            .attr("width", 75/2-10)
+            .attr("height", 200)
+            .style("fill", "url(#gradient)")
+            .attr("transform", "translate(0," + 10 + ")");
+
+        /*
+            Redraw the visualization using the current state of the master_list.
+
+            We could be here because
+            - we added some new files
+            - we removed a file
+            - we changed the fingerprint type
+        */
+
+        const update_visualization = function(){
+
+            // what kind of fingerprinting are we doing?
+            const fingerprint_type = document.getElementById('fingerprint_type').value;
+
+            // find min value of metric over all books
+            let minArray=[]
+            for (let i=0; i < master_file_list.length; i++){
+                minArray.push(d3.min(master_file_list[i][fingerprint_type]))
+            }
+
+            let ARR_MIN = d3.min(minArray)
+
+            // find max value of metric over all books
+            let maxArray = []
+            for (let i=0; i < master_file_list.length; i++){
+                maxArray.push(d3.max(master_file_list[i][fingerprint_type]))
+            }
+            let ARR_MAX = d3.max(maxArray)
+
+            // compute mid point between min and max
+            let ARR_MID = (ARR_MIN+ARR_MAX)/2
+
+            // update our color scale based on new min, mid, and max
+            const colors = d3.scaleLinear()
+              .domain([ARR_MIN, ARR_MID, ARR_MAX])
+              .range(["#67a9cf","#f7f7f7","#ef8a62"]);
+            let books = svg.selectAll(".books").data(master_file_list, (d) => d.name); //** maybe do unique data
+
+            books.exit().remove();
+            let new_books = books.enter().append('div')
+            .attr("class", "books")
+            .attr("width", DIV_WIDTH-20)
+            .attr("height", DIV_HEIGHT-20)
+            .append("svg")
+            .attr("width", DIV_WIDTH-30)
+            .attr("height", DIV_HEIGHT-30)
+
+              //append book title
+              let title = new_books.append("text")
+              .attr("class", "titleText")
+              .attr("x", 10)
+              .attr("y", 12)
+              .attr("fill", "black")
+              .text((d)=>d["Name"]);
+
+              // append remove button
+              let buttn = new_books.append("text")
+              .attr("class", "btn")
+              .attr("x", 700)
+              .attr("y", 12)
+              .attr("fill", "black")
+              .style("background", "red")
+              .text("Remove");
+
+              // remove button functionality
+              buttn.on("click", (item_data) => {
+                master_file_list= master_file_list.filter((d)=> d!=item_data);
+                console.log(master_file_list)
+                update_visualization()
+              });
+
+              // now add the colored rects for the text file
+              let blocks = new_books.selectAll(".rect")
+                .data((d)=>(d[fingerprint_type]));
+
+              const block_size = Math.floor((DIV_WIDTH-40)/10)
+              let new_blocks = blocks.enter()
+                .append("rect")
+                .attr("class", "rect")
+                .attr("x", (d,i)=>(i%block_size)*10 + 5)
+                .attr("y",  (d, i) => 40+Math.floor(i/block_size)*10)
+                .attr("height", 10)
+                .attr("width",10)
+                .style("stroke", "black")
+                .style("fill", (d,i)=>colors(d));
+
+
+            // color the rects with color scale based on current min, max, and mid
+            books.selectAll(".rect")
+            .data((d)=>d[fingerprint_type])
+            .style("fill", (d,i)=>colors(d));
+        };
+
+        /*
+            The process_text_data function takes in a name and the contents of the associated file. The function should process the text and return an object containing (at minimum), the name of a file, and a list of segment values for each metric.
+        */
+
+        const process_text_data = function(file_name, contents){
+            var file_dict = {} // make object to store name, average length, and uniqueness count
+            file_dict.Name = file_name // store file name
+
+            let contentArray = contents.split(/\s+/) // convert string into array of words
+            // use map to apply regex function to every element in the array
+            contentArray = contentArray.map(d=> d.replace(/(^(\W|\d)+|\W+$)/g, "")) // strip punctuation
+            contentArray = contentArray.map(d=> d.toLowerCase()) //make all words lowercase
+
+            let hapax_legomena_words = hapax_legomena_total(contentArray)
+            let numSegments = Math.floor(contentArray.length/WORDS_PER_BLOCK)
+            let segmentArray = []
+            let averageList = []
+            let hapax_legomena_list = []
+            let begin = 0
+            let end = WORDS_PER_BLOCK
+            for (let i=0; i<numSegments; i++) {
+                segmentArray = contentArray.slice(begin, end)
+                let average = average_length(segmentArray)
+                averageList.push(average)
+                let numUnique = hapax_legomena_segment(segmentArray, hapax_legomena_words)
+                hapax_legomena_list.push(numUnique)
+                begin += WORDS_PER_BLOCK
+                end += WORDS_PER_BLOCK
+            }
+            file_dict['average_length'] = averageList
+            file_dict.hapax_legomena = hapax_legomena_list
+            file_dict.name = master_file_list.length
+            return file_dict
+        };
+
+        // compute list of unique words in entire file
+        const hapax_legomena_total = function(file) {
+            let word_count = {}
+            let unique_words_total = []
+            for (let i = 1; i < file.length; i++) {
+                word = file[i]
+                if (word in word_count){
+                    word_count[word] += 1
+                }
+                else {
+                    word_count[word] = 1
+                }
+            }
+
+            for (let i = 1; i < file.length; i++) {
+                word = file[i]
+                if (word_count[word] == 1) {
+                    unique_words_total.push(word)
+                }
+            }
+            return unique_words_total
+        }
+
+        // compute average length of words in segment
+        const average_length = function(segment) {
+            let wordLength = 0;
+            for (let i = 1; i < segment.length; i++) {
+                wordLength += segment[i].length
+            }
+            let average = wordLength/segment.length
+            return average
+        }
+
+        // compute how many unique words appear in segment
+        const hapax_legomena_segment = function(segment, uniqueTotal) {
+            let numUnique = 0;
+            for (let i = 1; i < segment.length; i++) {
+                let word = segment[i]
+                if (uniqueTotal.includes(word)) {
+                    numUnique +=1;
+                }
+            }
+            return numUnique;
+        }
+
+        const svg = d3.select("#text-vis")
+            .attr("width", DIV_WIDTH)
+            .attr("height", DIV_HEIGHT);
+
+        /*
+            This function does the voodoo of "uploading" the files into the browser. You don't need to know exactly what is going on in here. The important parts are that when the user selects multiple files, this will read those files in, passing each one to process_text_data() for you to process. When they have all been processed, it will then call drawTextVis() with a list of all of the objects you produced in the process_text_data() function.
+        */
+        const handle_file_select = function(evt) {
+        const files = evt.target.files; // FileList object
+
+        const load_list = [];
+
+        for (let i = 0, f; f = files[i]; i++) {
+            const p = new Promise(function(resolve, reject){
+            const reader = new FileReader();
+
+            reader.onload = function(file_data){
+                return (event) => resolve(process_text_data(file_data.name, event.target.result));
+                }(f);
+            reader.readAsText(f);
+
+            });
+            load_list.push(p);
+        }
+
+        Promise.all(load_list).then(function(processed_records){
+            for (let i =0; i < processed_records.length; i++){
+                master_file_list.push(processed_records[i]);
+            }
+
+            update_visualization();
+        });
+
+        };
+
+    // add the event listener for the file addition button
+    document.getElementById('files').addEventListener('change', handle_file_select, false);
+
+    // add the event listener for changing the fingerprint type
+    document.getElementById('fingerprint_type').addEventListener('change', function(event){
+        update_visualization();
+
+    });
+
+    </script>
+</body>
+</html>
