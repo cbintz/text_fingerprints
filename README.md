@@ -10,5 +10,5 @@ The metric options are:
   
 To launch, download the provided Frankenstein and Pride and Prejudice txt files or use your own cleaned txt files, and either:
   1) Visit http://www.cs.middlebury.edu/~cbintz/infovis/hw7/assignment7.html
-  2) Download assignment7.html, open a terminal, cd into the directory to where you downloaded hw7.html, launch a server (python -m http.server), and navigate to that port in your web browser's address bar.
+  2) Download and open assignment7.html with your web browser.
  
